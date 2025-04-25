@@ -1,0 +1,71 @@
+import io.mockk.*
+import org.junit.jupiter.api.Test
+import java.io.ByteArrayInputStream
+import java.net.ServerSocket
+import java.net.Socket
+import java.io.ByteArrayOutputStream
+
+class MainKtTest {
+    private val out = ByteArrayOutputStream()
+    private val client = mockk<Socket> {
+        every { getOutputStream() } returns out
+        every { close() } just runs
+    }
+    private val serverSocket = mockk<ServerSocket> {
+        every { accept() } returns client
+        every { setReuseAddress(true) } just runs
+        every { close() } just runs
+    }
+    private val httpServer = MyHttpServer(serverSocket)
+
+    @Test
+    fun `given an http server, when sending an http get request, then a 200 ok should be received back`() {
+        //given
+        val input = ByteArrayInputStream("GET / HTTP/1.1\\r\\nHost: localhost:4221\\r\\nUser-Agent: curl/7.64.1\\r\\nAccept: */*\\r\\n\\r\\n".toByteArray())
+        every { client.getInputStream() } returns input
+        httpServer.initServer(endlessLoop = false)
+        val expectedResponse = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
+
+        assert(out.toByteArray().contentEquals(expectedResponse))
+
+        //then
+        verify {
+            client.close()
+        }
+        httpServer.closeServer()
+    }
+
+    @Test
+    fun `given an http server, when sending an http get request to an unknown url path, then a 400 Not Found should be received back`() {
+        //given
+        val input = ByteArrayInputStream("GET /abcde HTTP/1.1\\r\\nHost: localhost:4221\\r\\nUser-Agent: curl/7.64.1\\r\\nAccept: */*\\r\\n\\r\\n".toByteArray())
+        every { client.getInputStream() } returns input
+        httpServer.initServer(endlessLoop = false)
+        val expectedResponse = "HTTP/1.1 404 Not Found\r\n\r\n".toByteArray()
+
+        assert(out.toByteArray().contentEquals(expectedResponse))
+
+        //then
+        verify {
+            client.close()
+        }
+        httpServer.closeServer()
+    }
+
+    @Test
+    fun `given an http server, when sending an http get request to a known url path, then a 200 OK should be received back`() {
+        //given
+        val input = ByteArrayInputStream("GET / HTTP/1.1\\r\\nHost: localhost:4221\\r\\nUser-Agent: curl/7.64.1\\r\\nAccept: */*\\r\\n\\r\\n".toByteArray())
+        every { client.getInputStream() } returns input
+        httpServer.initServer(endlessLoop = false)
+        val expectedResponse = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
+
+        assert(out.toByteArray().contentEquals(expectedResponse))
+
+        //then
+        verify {
+            client.close()
+        }
+        httpServer.closeServer()
+    }
+}
