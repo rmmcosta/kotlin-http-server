@@ -21,12 +21,13 @@ class MainKtTest {
     @Test
     fun `given an http server, when sending an http get request, then a 200 ok should be received back`() {
         //given
-        val input = ByteArrayInputStream("GET / HTTP/1.1\\r\\nHost: localhost:4221\\r\\nUser-Agent: curl/7.64.1\\r\\nAccept: */*\\r\\n\\r\\n".toByteArray())
+        val input =
+            ByteArrayInputStream("GET / HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
         every { client.getInputStream() } returns input
         httpServer.initServer(endlessLoop = false)
         val expectedResponse = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
 
-        assert(out.toByteArray().contentEquals(expectedResponse))
+        assert(out.toByteArray().contentEquals(expectedResponse)) { "the outcome is not as expected: $out" }
 
         //then
         verify {
@@ -38,12 +39,13 @@ class MainKtTest {
     @Test
     fun `given an http server, when sending an http get request to an unknown url path, then a 400 Not Found should be received back`() {
         //given
-        val input = ByteArrayInputStream("GET /abcde HTTP/1.1\\r\\nHost: localhost:4221\\r\\nUser-Agent: curl/7.64.1\\r\\nAccept: */*\\r\\n\\r\\n".toByteArray())
+        val input =
+            ByteArrayInputStream("GET /abcde HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
         every { client.getInputStream() } returns input
         httpServer.initServer(endlessLoop = false)
         val expectedResponse = "HTTP/1.1 404 Not Found\r\n\r\n".toByteArray()
 
-        assert(out.toByteArray().contentEquals(expectedResponse))
+        assert(out.toByteArray().contentEquals(expectedResponse)) { "the outcome is not as expected: $out" }
 
         //then
         verify {
@@ -55,12 +57,34 @@ class MainKtTest {
     @Test
     fun `given an http server, when sending an http get request to a known url path, then a 200 OK should be received back`() {
         //given
-        val input = ByteArrayInputStream("GET / HTTP/1.1\\r\\nHost: localhost:4221\\r\\nUser-Agent: curl/7.64.1\\r\\nAccept: */*\\r\\n\\r\\n".toByteArray())
+        val input =
+            ByteArrayInputStream("GET / HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
         every { client.getInputStream() } returns input
         httpServer.initServer(endlessLoop = false)
         val expectedResponse = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
 
-        assert(out.toByteArray().contentEquals(expectedResponse))
+        assert(out.toByteArray().contentEquals(expectedResponse)) { "the outcome is not as expected: $out" }
+
+        //then
+        verify {
+            client.close()
+        }
+        httpServer.closeServer()
+    }
+
+    @Test
+    fun `given an http server, when sending an http get request to the echo str url path, then a 200 OK should be received back and the str in the response body`() {
+        //given
+        val input =
+            ByteArrayInputStream("GET /echo/hello HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
+        every { client.getInputStream() } returns input
+        httpServer.initServer(endlessLoop = false)
+        val expectedResponseString = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\n\r\nhello"
+        val expectedResponse = expectedResponseString.toByteArray()
+
+        assert(
+            out.toByteArray().contentEquals(expectedResponse)
+        ) { "the outcome is not as expected: $out vs $expectedResponseString" }
 
         //then
         verify {
