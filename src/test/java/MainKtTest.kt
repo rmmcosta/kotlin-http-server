@@ -92,4 +92,26 @@ class MainKtTest {
         }
         httpServer.closeServer()
     }
+
+    @Test
+    fun `given an http server, when sending an http get request to the user agent url path, then a 200 OK should be received back and the value of the user agent header in the response body`() {
+        //given
+        val userAgentValue = "curl/7.64.1"
+        val input =
+            ByteArrayInputStream("GET /user-agent HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: $userAgentValue\r\nAccept: */*\r\n\r\n".toByteArray())
+        every { client.getInputStream() } returns input
+        httpServer.initServer(endlessLoop = false)
+        val expectedResponseString = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgentValue.length}\r\n\r\n$userAgentValue"
+        val expectedResponse = expectedResponseString.toByteArray()
+
+        assert(
+            out.toByteArray().contentEquals(expectedResponse)
+        ) { "the outcome is not as expected: $out vs $expectedResponseString" }
+
+        //then
+        verify {
+            client.close()
+        }
+        httpServer.closeServer()
+    }
 }

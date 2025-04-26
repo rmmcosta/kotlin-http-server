@@ -1,3 +1,4 @@
+import java.io.BufferedReader
 import java.net.ServerSocket;
 import java.net.Socket
 import javax.print.attribute.standard.ReferenceUriSchemesSupported.HTTP
@@ -11,6 +12,8 @@ fun main() {
 }
 
 class MyHttpServer(private val serverSocket: ServerSocket) {
+    private var clientBufferedReader: BufferedReader? = null
+
     fun initServer(endlessLoop: Boolean = true) {
         // // Since the tester restarts your program quite often, setting SO_REUSEADDR
         // // ensures that we don't run into 'Address already in use' errors
@@ -25,7 +28,7 @@ class MyHttpServer(private val serverSocket: ServerSocket) {
             val responseStatus = handleUrlPath(urlPath)
             println("response status: $responseStatus")
             val out = clientSocket.getOutputStream()
-            out.write(buildResponse(responseStatus, urlPath))
+            out.write(buildResponse(responseStatus, urlPath, clientSocket))
             out.flush()
             clientSocket.close()
             ranOnce = true
@@ -36,21 +39,34 @@ class MyHttpServer(private val serverSocket: ServerSocket) {
         serverSocket.close()
     }
 
-    private fun buildResponse(httpStatus: HttpStatus, urlPath: String): ByteArray {
+    private fun buildResponse(httpStatus: HttpStatus, urlPath: String, clientSocket: Socket): ByteArray {
         val responseBody = buildResponseBody(urlPath)
         return "HTTP/1.1 $httpStatus\r\n$responseBody".toByteArray()
     }
 
     private fun buildResponseBody(urlPath: String): String {
-        val firstResource = getFirstResource(urlPath)
-        val body = if (firstResource == KnownUrlPaths.ECHO.urlPath) urlPath.replace(firstResource, " ").trim()
-            .substring(1) else ""
+        val body = when (val firstResource = getFirstResource(urlPath)) {
+            KnownUrlPaths.ECHO.urlPath -> urlPath.replace(firstResource, " ").trim()
+                .substring(1)
+
+            KnownUrlPaths.USER_AGENT.urlPath -> getUserAgentValue()
+            else -> ""
+        }
         return if (body.isEmpty()) "\r\n" else "Content-Type: text/plain\r\nContent-Length: ${body.length}\r\n\r\n$body"
     }
 
+    private fun getUserAgentValue(): String {
+        val userAgentHeader = "User-Agent:"
+        while (true) {
+            val line = clientBufferedReader?.readLine() ?: return ""
+            if (line.startsWith(userAgentHeader))
+                return line.replace(userAgentHeader, " ").trim()
+        }
+    }
+
     private fun extractUrlPath(clientSocket: Socket): String {
-        val request = clientSocket.getInputStream().bufferedReader()
-        val request1stLine = request.readLine() ?: return ""
+        clientBufferedReader = clientSocket.getInputStream().bufferedReader()
+        val request1stLine = clientBufferedReader?.readLine() ?: return ""
         val firstSlashIndex = request1stLine.indexOf("/")
         val httpIndex = request1stLine.indexOf("HTTP")
         return request1stLine.substring(firstSlashIndex, httpIndex).trim()
@@ -78,7 +94,7 @@ enum class HttpStatus(private val code: Int, private val status: String) {
 }
 
 enum class KnownUrlPaths(val urlPath: String) {
-    ROOT("/"), ROOT_2(""), ECHO("/echo");
+    ROOT("/"), ROOT_2(""), ECHO("/echo"), USER_AGENT("/user-agent");
 
     companion object {
         fun isUrlPathKnown(urlPath: String): Boolean = entries.any { it.urlPath == urlPath }
