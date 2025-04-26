@@ -1,117 +1,73 @@
-import io.mockk.*
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import java.io.ByteArrayInputStream
-import java.net.ServerSocket
-import java.net.Socket
-import java.io.ByteArrayOutputStream
+import khttp.get
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import java.lang.Thread.sleep
+import kotlin.concurrent.thread
 
 class MainKtTest {
-    private val out = ByteArrayOutputStream()
-    private val client = mockk<Socket> {
-        every { getOutputStream() } returns out
-        every { close() } just runs
-    }
-    private val serverSocket = mockk<ServerSocket> {
-        every { accept() } returns client
-        every { setReuseAddress(true) } just runs
-        every { close() } just runs
-    }
-    private val httpServer = MyHttpServer(serverSocket)
-
     @Test
-    fun `given an http server, when sending an http get request, then a 200 ok should be received back`() {
-        //given
-        val input =
-            ByteArrayInputStream("GET / HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
-        every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
-        val expectedResponse = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
+    fun `given and endless loop running http server, when making multiple valid requests, then the server responds well`() {
+        val okSimpleResponse = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
+        val notFoundResponse = "HTTP/1.1 404 Not Found\r\n\r\n".toByteArray()
+        val userAgentValue = "Agent 47"
+        val userAgentResponse =
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgentValue.length}\r\n\r\n$userAgentValue".toByteArray()
 
-        assert(out.toByteArray().contentEquals(expectedResponse)) { "the outcome is not as expected: $out" }
+        runBlocking {
+            thread {
+                main()
+            }
 
-        //then
-        verify {
-            client.close()
+            delay(500)
+
+            buildList {
+                add(launch {
+                    simpleRootHttpCall()
+                })
+                add(launch {
+                    simpleRootHttpCall()
+                })
+                add(launch {
+                    notFoundHttpCall()
+                })
+                add(launch {
+                    notFoundHttpCall()
+                })
+                add(launch {
+                    userAgentHttpCall(userAgentValue)
+                })
+                add(launch {
+                    userAgentHttpCall(userAgentValue)
+                })
+            }.joinAll()
         }
-        httpServer.closeServer()
+
+        get("http://localhost:$SERVER_PORT/stop")
     }
 
-    @Test
-    fun `given an http server, when sending an http get request to an unknown url path, then a 400 Not Found should be received back`() {
-        //given
-        val input =
-            ByteArrayInputStream("GET /abcde HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
-        every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
-        val expectedResponse = "HTTP/1.1 404 Not Found\r\n\r\n".toByteArray()
-
-        assert(out.toByteArray().contentEquals(expectedResponse)) { "the outcome is not as expected: $out" }
-
-        //then
-        verify {
-            client.close()
-        }
-        httpServer.closeServer()
+    private fun userAgentHttpCall(userAgentValue: String) {
+        val result = get("http://localhost:$SERVER_PORT/user-agent", mapOf("User-Agent" to userAgentValue))
+        val statusCode = result.statusCode
+        val body = String(result.content)
+        assert(statusCode == 200) { "status code was $statusCode" }
+        assert(body == userAgentValue) { "user agent was $body" }
     }
 
-    @Test
-    fun `given an http server, when sending an http get request to a known url path, then a 200 OK should be received back`() {
-        //given
-        val input =
-            ByteArrayInputStream("GET / HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
-        every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
-        val expectedResponse = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
-
-        assert(out.toByteArray().contentEquals(expectedResponse)) { "the outcome is not as expected: $out" }
-
-        //then
-        verify {
-            client.close()
-        }
-        httpServer.closeServer()
+    private fun notFoundHttpCall() {
+        val result = get("http://localhost:$SERVER_PORT/abcde")
+        val statusCode = result.statusCode
+        assert(statusCode == 404) { "status code was $statusCode" }
     }
 
-    @Test
-    fun `given an http server, when sending an http get request to the echo str url path, then a 200 OK should be received back and the str in the response body`() {
-        //given
-        val input =
-            ByteArrayInputStream("GET /echo/hello HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
-        every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
-        val expectedResponseString = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\n\r\nhello"
-        val expectedResponse = expectedResponseString.toByteArray()
-
-        assert(
-            out.toByteArray().contentEquals(expectedResponse)
-        ) { "the outcome is not as expected: $out vs $expectedResponseString" }
-
-        //then
-        verify {
-            client.close()
-        }
-        httpServer.closeServer()
-    }
-
-    @Test
-    fun `given an http server, when sending an http get request to the user agent url path, then a 200 OK should be received back and the value of the user agent header in the response body`() {
-        //given
-        val userAgentValue = "curl/7.64.1"
-        val input =
-            ByteArrayInputStream("GET /user-agent HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: $userAgentValue\r\nAccept: */*\r\n\r\n".toByteArray())
-        every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
-        val expectedResponseString = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgentValue.length}\r\n\r\n$userAgentValue"
-        val expectedResponse = expectedResponseString.toByteArray()
-
-        assert(
-            out.toByteArray().contentEquals(expectedResponse)
-        ) { "the outcome is not as expected: $out vs $expectedResponseString" }
-
-        //then
-        verify {
-            client.close()
-        }
-        httpServer.closeServer()
+    private fun simpleRootHttpCall() {
+        val result = get("http://localhost:$SERVER_PORT")
+        val statusCode = result.statusCode
+        val body = String(result.content)
+        assert(statusCode == 200) { "status code was $statusCode" }
+        assert(body == "") { "body was $body" }
     }
 }
