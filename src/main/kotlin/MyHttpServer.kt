@@ -1,6 +1,7 @@
 import java.io.BufferedReader
 import java.net.ServerSocket
 import java.net.Socket
+import kotlin.concurrent.thread
 
 const val SERVER_PORT = 4221
 
@@ -11,29 +12,35 @@ class MyHttpServer(private val serverSocket: ServerSocket) {
         var ranOnce = false
 
         while (!ranOnce || endlessLoop) {
-            serverSocket.accept().use { clientSocket ->
-                println("Accepted new connection")
+            val clientSocket = serverSocket.accept()
+            thread {
+                handleClient(clientSocket)
+            }
+            ranOnce = true
+        }
+    }
 
-                val bufferedReader = clientSocket.getInputStream().bufferedReader()
-                val requestLine = bufferedReader.readLine().orEmpty()
-                val urlPath = extractUrlPath(requestLine)
+    private fun handleClient(clientSocket: Socket) {
+        clientSocket.use { socket ->
+            println("Accepted new connection")
 
-                println("urlPath: $urlPath")
+            val bufferedReader = socket.getInputStream().bufferedReader()
+            val requestLine = bufferedReader.readLine().orEmpty()
+            val urlPath = extractUrlPath(requestLine)
 
-                val responseStatus = determineStatus(urlPath)
-                println("response status: $responseStatus")
+            println("urlPath: $urlPath")
 
-                val responseBytes = buildResponse(responseStatus, urlPath, bufferedReader)
-                clientSocket.getOutputStream().use { out ->
-                    out.write(responseBytes)
-                    out.flush()
-                }
+            val responseStatus = determineStatus(urlPath)
+            println("response status: $responseStatus")
 
-                if (urlPath == KnownUrlPaths.STOP.urlPath) {
-                    closeServer()
-                    return
-                }
-                ranOnce = true
+            val responseBytes = buildResponse(responseStatus, urlPath, bufferedReader)
+            socket.getOutputStream().use { out ->
+                out.write(responseBytes)
+                out.flush()
+            }
+
+            if (urlPath == KnownUrlPaths.STOP.urlPath) {
+                closeServer()
             }
         }
     }
