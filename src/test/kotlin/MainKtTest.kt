@@ -15,7 +15,7 @@ class MainKtTest {
 
         runBlocking {
             thread {
-                main(arrayOf("httpServer", SERVER_PORT_TEST.toString()))
+                main(arrayOf("httpServer", "server-port:$SERVER_PORT_TEST"))
             }
 
             delay(500)

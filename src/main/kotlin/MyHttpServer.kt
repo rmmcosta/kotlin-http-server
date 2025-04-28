@@ -1,23 +1,29 @@
 import java.io.BufferedReader
+import java.io.File
 import java.net.ServerSocket
 import java.net.Socket
 import kotlin.concurrent.thread
 
 const val SERVER_PORT = 4221
 
-class MyHttpServer(private val serverSocket: ServerSocket) {
+class MyHttpServer(
+    private val serverSocket: ServerSocket,
+    private val defaultDir: String = "",
+) {
 
-    fun initServer(endlessLoop: Boolean = true) {
+    fun initServer(endlessLoop: Boolean = true): Thread? {
         serverSocket.reuseAddress = true
         var ranOnce = false
+        var clientThread: Thread? = null
 
         while (!ranOnce || endlessLoop) {
             val clientSocket = serverSocket.accept()
-            thread {
+            clientThread = thread {
                 handleClient(clientSocket)
             }
             ranOnce = true
         }
+        return clientThread
     }
 
     private fun handleClient(clientSocket: Socket) {
@@ -54,14 +60,18 @@ class MyHttpServer(private val serverSocket: ServerSocket) {
     }
 
     private fun buildResponseBody(urlPath: String, reader: BufferedReader): String {
-        val body = when (val resource = getFirstResource(urlPath)) {
-            KnownUrlPaths.ECHO.urlPath -> urlPath.removePrefix(resource).trimStart('/')
-            KnownUrlPaths.USER_AGENT.urlPath -> extractUserAgent(reader)
-            else -> ""
+        val (body, type) = when (val resource = getFirstResource(urlPath)) {
+            KnownUrlPaths.ECHO.urlPath -> urlPath.removePrefix(resource).trimStart('/') to "text/plain"
+            KnownUrlPaths.USER_AGENT.urlPath -> extractUserAgent(reader) to "text/plain"
+            KnownUrlPaths.FILES.urlPath -> getFileContents(urlPath.removePrefix("$resource/")) to "application/octet-stream"
+            else -> "" to ""
         }
         return if (body.isEmpty()) "\r\n" else
-            "Content-Type: text/plain\r\nContent-Length: ${body.length}\r\n\r\n$body"
+            "Content-Type: $type\r\nContent-Length: ${body.length}\r\n\r\n$body"
     }
+
+    private fun getFileContents(filePath: String): String =
+        File("$defaultDir$filePath").useLines { it.joinToString("\n") }
 
     private fun extractUserAgent(reader: BufferedReader): String {
         val userAgentPrefix = "User-Agent:"
@@ -113,6 +123,7 @@ enum class KnownUrlPaths(val urlPath: String) {
     ROOT_2(""),
     ECHO("/echo"),
     USER_AGENT("/user-agent"),
+    FILES("/files"),
     STOP("/stop");
 
     companion object {

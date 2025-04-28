@@ -1,9 +1,12 @@
 import io.mockk.*
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.net.ServerSocket
 import java.net.Socket
-import java.io.ByteArrayOutputStream
+import java.nio.file.Files
+import java.nio.file.Paths
+import kotlin.io.path.writeText
 
 class MyHttpServerTest {
     private val out = ByteArrayOutputStream()
@@ -24,8 +27,10 @@ class MyHttpServerTest {
         val input =
             ByteArrayInputStream("GET / HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
         every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
+        val clientThread = httpServer.initServer(endlessLoop = false)
         val expectedResponse = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
+
+        clientThread?.join()
 
         assert(out.toByteArray().contentEquals(expectedResponse)) { "the outcome is not as expected: $out" }
 
@@ -42,8 +47,10 @@ class MyHttpServerTest {
         val input =
             ByteArrayInputStream("GET /abcde HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
         every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
+        val clientThread = httpServer.initServer(endlessLoop = false)
         val expectedResponse = "HTTP/1.1 404 Not Found\r\n\r\n".toByteArray()
+
+        clientThread?.join()
 
         assert(out.toByteArray().contentEquals(expectedResponse)) { "the outcome is not as expected: $out" }
 
@@ -60,8 +67,10 @@ class MyHttpServerTest {
         val input =
             ByteArrayInputStream("GET / HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
         every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
+        val clientThread = httpServer.initServer(endlessLoop = false)
         val expectedResponse = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
+
+        clientThread?.join()
 
         assert(out.toByteArray().contentEquals(expectedResponse)) { "the outcome is not as expected: $out" }
 
@@ -78,9 +87,11 @@ class MyHttpServerTest {
         val input =
             ByteArrayInputStream("GET /echo/hello HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n".toByteArray())
         every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
+        val clientThread = httpServer.initServer(endlessLoop = false)
         val expectedResponseString = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\n\r\nhello"
         val expectedResponse = expectedResponseString.toByteArray()
+
+        clientThread?.join()
 
         assert(
             out.toByteArray().contentEquals(expectedResponse)
@@ -100,9 +111,12 @@ class MyHttpServerTest {
         val input =
             ByteArrayInputStream("GET /user-agent HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: $userAgentValue\r\nAccept: */*\r\n\r\n".toByteArray())
         every { client.getInputStream() } returns input
-        httpServer.initServer(endlessLoop = false)
-        val expectedResponseString = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgentValue.length}\r\n\r\n$userAgentValue"
+        val clientThread = httpServer.initServer(endlessLoop = false)
+        val expectedResponseString =
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgentValue.length}\r\n\r\n$userAgentValue"
         val expectedResponse = expectedResponseString.toByteArray()
+
+        clientThread?.join()
 
         assert(
             out.toByteArray().contentEquals(expectedResponse)
@@ -113,5 +127,43 @@ class MyHttpServerTest {
             client.close()
         }
         httpServer.closeServer()
+    }
+
+    @Test
+    fun `given an http server, when sending an http get request to the files url path followed by a valid file, then a 200 OK should be received back and the file content in the response body`() {
+        //given
+        val fileContent = "Hello, World!"
+
+        val defaultDir = System.getProperty("user.dir")
+        println("default dir in tests: $defaultDir")
+        val path = Paths.get("xpto")
+        if (Files.notExists(path)) {
+            val file = Files.createFile(path)
+            //file.createNewFile()
+            file.writeText(fileContent)
+        }
+        val input =
+            ByteArrayInputStream("GET /files/xpto HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: firefox\r\nAccept: */*\r\n\r\n".toByteArray())
+        every { client.getInputStream() } returns input
+        try {
+            val clientThread = httpServer.initServer(endlessLoop = false)
+            val expectedResponseString =
+                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ${fileContent.length}\r\n\r\n$fileContent"
+            val expectedResponse = expectedResponseString.toByteArray()
+
+            clientThread?.join()
+
+            assert(
+                out.toByteArray().contentEquals(expectedResponse)
+            ) { "the outcome is not as expected: $out vs $expectedResponseString" }
+
+            //then
+            verify {
+                client.close()
+            }
+        } finally {
+            httpServer.closeServer()
+            Files.deleteIfExists(path)
+        }
     }
 }
