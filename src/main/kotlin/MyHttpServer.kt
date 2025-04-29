@@ -12,6 +12,7 @@ class MyHttpServer(
 ) {
 
     fun initServer(endlessLoop: Boolean = true): Thread? {
+        println("working dir: $defaultDir")
         serverSocket.reuseAddress = true
         var ranOnce = false
         var clientThread: Thread? = null
