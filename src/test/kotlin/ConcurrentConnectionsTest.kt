@@ -2,11 +2,7 @@ import kotlinx.coroutines.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.OutputStream
 import java.net.ServerSocket
-import java.net.Socket
 
 class ConcurrentConnectionsTest {
 
@@ -15,7 +11,7 @@ class ConcurrentConnectionsTest {
 
     @BeforeEach
     fun setUp() {
-        val serverSocket = ServerSocket(SERVER_PORT)
+        val serverSocket = ServerSocket(SERVER_PORT+10)
         server = MyHttpServer(serverSocket)
 
         serverThread = Thread {

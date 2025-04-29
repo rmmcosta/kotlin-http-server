@@ -2,6 +2,7 @@ import io.mockk.*
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.file.Files
@@ -194,6 +195,33 @@ class MyHttpServerTest {
             }
         } finally {
             httpServer.closeServer()
+        }
+    }
+
+    @Test
+    fun `given an http server, when sending an http post request to the files url path followed by a valid file, then a 201 Created should be received back`() {
+        //given
+        val input =
+            ByteArrayInputStream("POST /files/xpto HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: firefox\r\nAccept: */*\r\nContent-Type: application/octet-stream\r\nContent-Length: 5\r\n\r\n12345".toByteArray())
+        every { client.getInputStream() } returns input
+        try {
+            val clientThread = httpServer.initServer(endlessLoop = false)
+            val expectedResponseString = "HTTP/1.1 201 Created\r\n\r\n"
+            val expectedResponse = expectedResponseString.toByteArray()
+
+            clientThread?.join()
+
+            assert(
+                out.toByteArray().contentEquals(expectedResponse)
+            ) { "the outcome is not as expected: $out vs $expectedResponseString" }
+
+            //then
+            verify {
+                client.close()
+            }
+        } finally {
+            httpServer.closeServer()
+            File("${System.getProperty("user.dir")}/xpto").delete()
         }
     }
 }
