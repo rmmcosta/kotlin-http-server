@@ -1,5 +1,7 @@
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileNotFoundException
+import java.lang.Exception
 import java.net.ServerSocket
 import java.net.Socket
 import kotlin.concurrent.thread
@@ -53,11 +55,15 @@ class MyHttpServer(
     }
 
     private fun buildResponse(httpStatus: HttpStatus, urlPath: String, reader: BufferedReader): ByteArray {
-        val responseBody = buildResponseBody(urlPath, reader)
-        val response = "HTTP/1.1 $httpStatus\r\n$responseBody"
-        println("Final response: $response")
-        println("End of final response")
-        return response.toByteArray()
+        return try {
+            val responseBody = buildResponseBody(urlPath, reader)
+            val response = "HTTP/1.1 $httpStatus\r\n$responseBody"
+            println("Final response: $response")
+            println("End of final response")
+            response.toByteArray()
+        } catch (fileNotFound: FileNotFoundException) {
+            "HTTP/1.1 ${HttpStatus.NOT_FOUND}\r\n\r\n".toByteArray()
+        }
     }
 
     private fun buildResponseBody(urlPath: String, reader: BufferedReader): String {

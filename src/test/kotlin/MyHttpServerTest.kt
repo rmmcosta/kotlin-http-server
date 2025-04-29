@@ -166,4 +166,34 @@ class MyHttpServerTest {
             Files.deleteIfExists(path)
         }
     }
+
+    @Test
+    fun `given an http server, when sending an http get request to the files url path followed by a invalid file, then a 404 Not Found should be received back and the file content in the response body`() {
+        //given
+        val defaultDir = System.getProperty("user.dir")
+        println("default dir in tests: $defaultDir")
+
+        val input =
+            ByteArrayInputStream("GET /files/xpto HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: firefox\r\nAccept: */*\r\n\r\n".toByteArray())
+        every { client.getInputStream() } returns input
+        try {
+            val clientThread = httpServer.initServer(endlessLoop = false)
+            val expectedResponseString =
+                "HTTP/1.1 404 Not Found\r\n\r\n"
+            val expectedResponse = expectedResponseString.toByteArray()
+
+            clientThread?.join()
+
+            assert(
+                out.toByteArray().contentEquals(expectedResponse)
+            ) { "the outcome is not as expected: $out vs $expectedResponseString" }
+
+            //then
+            verify {
+                client.close()
+            }
+        } finally {
+            httpServer.closeServer()
+        }
+    }
 }
