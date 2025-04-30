@@ -46,10 +46,11 @@ class MyHttpServer(
                 println("response status: $responseStatus")
 
                 handleRequest(method, responseStatus, urlPath, bufferedReader, inputStream)
-
             } catch (_: Exception) {
                 "HTTP/1.1 ${HttpStatus.BAD_REQUEST}\r\n\r\n".toByteArray()
             }
+
+            println("request handled:${String(responseBytes)}")
 
             socket.getOutputStream().use { out ->
                 out.write(responseBytes)
@@ -82,21 +83,26 @@ class MyHttpServer(
         val firstResource = getFirstResource(urlPath)
         val resourceName = urlPath.removePrefix("$firstResource/")
         val contentLength = extractContentLength(bufferedReader)
-        val payload = extractPayload(inputStream, contentLength)
+        println("content length extracted")
+        val payload = extractPayload(bufferedReader, contentLength)
+        println("payload extracted")
         val file = File("$defaultDir$resourceName")
         file.createNewFile()
         file.writeText(payload)
+        println("file written")
     }
 
-    private fun extractPayload(inputStream: InputStream, contentLength: Int): String {
-        val buffer = ByteArray(contentLength)
-        var totalRead = 0
-        while (totalRead < contentLength) {
-            val bytesRead = inputStream.read(buffer, totalRead, contentLength - totalRead)
-            if (bytesRead == -1) break
-            totalRead += bytesRead
+    private fun extractPayload(bufferedReader: BufferedReader, contentLength: Int): String {
+        val buffer = mutableListOf<String>()
+        var bytesRead = 0
+        while (bytesRead < contentLength) {
+            val line = bufferedReader.readLine()
+            buffer.add(line)
+            bytesRead += line.length
+            println("bytes read:$bytesRead")
         }
-        return String(buffer, Charsets.UTF_8)
+        println("final bytes read:$bytesRead")
+        return buffer.joinToString("\n")
     }
 
     private fun extractContentLength(bufferedReader: BufferedReader): Int =
@@ -177,13 +183,5 @@ enum class KnownUrlPaths(val urlPath: String) {
 
     companion object {
         fun isUrlPathKnown(path: String): Boolean = entries.any { it.urlPath == path }
-    }
-}
-
-enum class HttpMethod {
-    GET, POST;
-
-    companion object {
-        fun fromValue(value: String): HttpMethod? = entries.find { it.name == value }
     }
 }
