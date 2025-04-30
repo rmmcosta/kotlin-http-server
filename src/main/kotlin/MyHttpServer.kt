@@ -15,14 +15,12 @@ class MyHttpServer(
     fun initServer(endlessLoop: Boolean = true): Thread? {
         println("working dir: $defaultDir")
         serverSocket.reuseAddress = true
-        serverSocket.soTimeout = 500
         var ranOnce = false
         var clientThread: Thread? = null
 
         while (!ranOnce || endlessLoop) {
             try {
                 val clientSocket = serverSocket.accept()
-                clientSocket.soTimeout = 500
                 clientThread = thread {
                     handleClient(clientSocket)
                 }
