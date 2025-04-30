@@ -12,5 +12,5 @@ fun main(args: Array<String>) {
     val directoryArgIndex = args.indexOf("--directory") + 1
     val defaultDir: String = args.getOrNull(directoryArgIndex) ?: System.getProperty("user.dir")
     println("default dir: $defaultDir")
-    MyHttpServer(ServerSocket(port), defaultDir).initServer()
+    MyHttpServer(ServerSocket(port), defaultDir, HttpRequestParser()).initServer()
 }
