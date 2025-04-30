@@ -25,28 +25,33 @@ class HttpRequestParser {
 
     private fun readUntilHeadersEnd(inputStream: InputStream, maxHeaderSize: Int = 8192): ByteArray {
         val buffer = mutableListOf<Byte>()
-        return try {
-            var lastFour = byteArrayOf()
+        var lastFour = byteArrayOf()
 
-            while (true) {
+        while (true) {
+            while (inputStream.available() > 0) {
                 val next = inputStream.read()
                 if (next == -1) break
                 buffer.add(next.toByte())
 
-                if (buffer.size > maxHeaderSize) throw Exception("Request malformed or headers too large")
-
                 lastFour = (lastFour + next.toByte()).takeLast(4).toByteArray()
-                if (validEndOfRequest(lastFour)) break
+                if (lastFour.contentEquals("\r\n\r\n".toByteArray())) {
+                    return buffer.toByteArray()
+                }
+
+                if (buffer.size > maxHeaderSize) {
+                    throw BadRequestException("Headers too large or malformed")
+                }
             }
 
-            if (!validEndOfRequest(lastFour)) throw Exception("Malformed request - Headers not properly ended")
-
-            buffer.toByteArray()
-        } catch (exception: Exception) {
-            if (buffer.isEmpty()) throw RequestTimeoutException("No data received") else throw BadRequestException(
-                exception.message ?: ""
-            )
+            // No more data available now, exit and parse whatever we have
+            break
         }
+
+        if (!lastFour.contentEquals("\r\n\r\n".toByteArray())) {
+            throw BadRequestException("Headers not terminated")
+        }
+
+        return buffer.toByteArray()
     }
 
     private fun validEndOfRequest(lastFour: ByteArray): Boolean = lastFour.contentEquals("\r\n\r\n".toByteArray())
