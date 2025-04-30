@@ -19,11 +19,16 @@ class MyHttpServer(
         var clientThread: Thread? = null
 
         while (!ranOnce || endlessLoop) {
-            val clientSocket = serverSocket.accept()
-            clientThread = thread {
-                handleClient(clientSocket)
+            try {
+                val clientSocket = serverSocket.accept()
+                clientThread = thread {
+                    handleClient(clientSocket)
+                }
+                ranOnce = true
+            } catch (e: java.net.SocketException) {
+                println("Server socket closed, shutting down server loop.")
+                break
             }
-            ranOnce = true
         }
         return clientThread
     }
@@ -67,7 +72,7 @@ class MyHttpServer(
     private fun handlePost(responseStatus: HttpStatus, urlPath: String, payload: String): ByteArray =
         if (responseStatus == HttpStatus.CREATED) {
             createResource(urlPath, payload)
-            "HTTP/1.1 $responseStatus\r\n\r\n".toByteArray()
+            "HTTP/1.1 $responseStatus\r\nConnection: close\r\nContent-Length: 0\r\n\r\n".toByteArray()
         } else "".toByteArray()
 
     private fun createResource(urlPath: String, payload: String) {

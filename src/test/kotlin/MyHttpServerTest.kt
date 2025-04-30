@@ -206,7 +206,7 @@ class MyHttpServerTest {
         every { client.getInputStream() } returns input
         try {
             val clientThread = httpServer.initServer(endlessLoop = false)
-            val expectedResponseString = "HTTP/1.1 201 Created\r\n\r\n"
+            val expectedResponseString = "HTTP/1.1 201 Created\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
             val expectedResponse = expectedResponseString.toByteArray()
 
             clientThread?.join()

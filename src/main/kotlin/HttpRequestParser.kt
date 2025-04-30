@@ -1,43 +1,70 @@
-import java.io.BufferedReader
 import java.io.InputStream
 
 class HttpRequestParser {
-    fun parse(request: InputStream): HttpRequest {
-        val bufferedReader = request.bufferedReader()
-        val requestLine = bufferedReader.readLine()
-        val (method, urlPath) = parseRequestLine(requestLine)
-        val typedMethod = HttpMethod.fromValue(method) ?: throw Exception("Not a supported HTTP Method")
-        val headers = parseHeaders(bufferedReader)
-        val contentLength = headers.getOrDefault("Content-Length", "").toIntOrNull()
-        val body = contentLength?.let { parseBody(bufferedReader, it) }
-        return HttpRequest(typedMethod, urlPath, headers, body)
+    fun parse(inputStream: InputStream): HttpRequest {
+        val requestBytes = readUntilHeadersEnd(inputStream)
+        val requestText = String(requestBytes)
+        val headerSections = requestText.split("\r\n\r\n", limit = 2)
+        val headerLines = headerSections[0].split("\r\n")
+
+        val requestLine = headerLines.first()
+
+        val (methodStr, urlPath, _) = requestLine.split(" ")
+        val method = HttpMethod.fromValue(methodStr) ?: throw Exception("Unsupported HTTP method")
+
+        val headers = headerLines
+            .drop(1)
+            .filter { it.contains(":") }
+            .associate {
+                val (key, value) = it.split(":", limit = 2)
+                key.trim() to value.trim()
+            }
+
+        val contentLength = headers["Content-Length"]?.toIntOrNull() ?: 0
+        val body = if (contentLength > 0) readBody(inputStream, contentLength) else null
+
+        return HttpRequest(method, urlPath, headers, body)
     }
 
-    private fun parseBody(bufferedReader: BufferedReader, contentLength: Int): String {
-        var bodySize = 0
-        val lines = mutableListOf<String>()
-        while (bodySize < contentLength) {
-            val nextLine = bufferedReader.readLine()
-            lines.add(nextLine)
-            bodySize += nextLine.length
+    private fun parseRequestLine(requestLine: String?): Triple<String, String, String?> {
+        requireNotNull(requestLine) { "Missing request line" }
+
+        val parts = requestLine.trim().split(" ")
+        require(parts.size >= 2) { "Malformed request line: '$requestLine'" }
+
+        val method = parts[0]
+        val path = parts[1]
+        val version = parts.getOrNull(2) // Optional
+
+        return Triple(method, path, version)
+    }
+
+
+    private fun readUntilHeadersEnd(inputStream: InputStream): ByteArray {
+        val buffer = mutableListOf<Byte>()
+        var lastFour = byteArrayOf()
+
+        while (true) {
+            val next = inputStream.read()
+            if (next == -1) break
+            buffer.add(next.toByte())
+
+            lastFour = (lastFour + next.toByte()).takeLast(4).toByteArray()
+            if (lastFour.contentEquals("\r\n\r\n".toByteArray())) break
         }
-        return lines.joinToString("\n")
+
+        return buffer.toByteArray()
     }
 
-    private fun parseHeaders(bufferedReader: BufferedReader): Map<String, String> {
-        val headers = mutableMapOf<String, String>()
-        var nextLine = bufferedReader.readLine()
-        while (nextLine.isNotBlank()) {
-            val parts = nextLine.split(":").filter { it.isNotBlank() }
-            headers.put(parts[0].trim(), parts.subList(1, parts.size).joinToString(":").trim())
-            nextLine = bufferedReader.readLine()
+    private fun readBody(inputStream: InputStream, length: Int): String {
+        val buffer = ByteArray(length)
+        var read = 0
+        while (read < length) {
+            val r = inputStream.read(buffer, read, length - read)
+            if (r == -1) break
+            read += r
         }
-        return headers
-    }
-
-    private fun parseRequestLine(requestLine: String): Pair<String, String> {
-        val parts = requestLine.split(" ").filter { it.isNotBlank() }
-        return parts[0].trim() to parts[1].trim()
+        return String(buffer, 0, read)
     }
 }
 
