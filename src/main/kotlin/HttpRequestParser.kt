@@ -28,23 +28,18 @@ class HttpRequestParser {
         var lastFour = byteArrayOf()
 
         while (true) {
-            while (inputStream.available() > 0) {
-                val next = inputStream.read()
-                if (next == -1) break
-                buffer.add(next.toByte())
+            val next = inputStream.read()
+            if (next == -1) break
+            buffer.add(next.toByte())
 
-                lastFour = (lastFour + next.toByte()).takeLast(4).toByteArray()
-                if (lastFour.contentEquals("\r\n\r\n".toByteArray())) {
-                    return buffer.toByteArray()
-                }
-
-                if (buffer.size > maxHeaderSize) {
-                    throw BadRequestException("Headers too large or malformed")
-                }
+            lastFour = (lastFour + next.toByte()).takeLast(4).toByteArray()
+            if (lastFour.contentEquals("\r\n\r\n".toByteArray())) {
+                return buffer.toByteArray()
             }
 
-            // No more data available now, exit and parse whatever we have
-            break
+            if (buffer.size > maxHeaderSize) {
+                throw BadRequestException("Headers too large or malformed")
+            }
         }
 
         if (!lastFour.contentEquals("\r\n\r\n".toByteArray())) {
