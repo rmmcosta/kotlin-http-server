@@ -12,13 +12,10 @@ class HttpRequestParser {
         val (methodStr, urlPath, _) = requestLine.split(" ")
         val method = HttpMethod.fromValue(methodStr) ?: throw Exception("Unsupported HTTP method")
 
-        val headers = headerLines
-            .drop(1)
-            .filter { it.contains(":") }
-            .associate {
-                val (key, value) = it.split(":", limit = 2)
-                key.trim() to value.trim()
-            }
+        val headers = headerLines.drop(1).filter { it.contains(":") }.associate {
+            val (key, value) = it.split(":", limit = 2)
+            key.trim() to value.trim()
+        }
 
         val contentLength = headers["Content-Length"]?.toIntOrNull() ?: 0
         val body = if (contentLength > 0) readBody(inputStream, contentLength) else null
@@ -26,35 +23,33 @@ class HttpRequestParser {
         return HttpRequest(method, urlPath, headers, body)
     }
 
-    private fun parseRequestLine(requestLine: String?): Triple<String, String, String?> {
-        requireNotNull(requestLine) { "Missing request line" }
-
-        val parts = requestLine.trim().split(" ")
-        require(parts.size >= 2) { "Malformed request line: '$requestLine'" }
-
-        val method = parts[0]
-        val path = parts[1]
-        val version = parts.getOrNull(2) // Optional
-
-        return Triple(method, path, version)
-    }
-
-
-    private fun readUntilHeadersEnd(inputStream: InputStream): ByteArray {
+    private fun readUntilHeadersEnd(inputStream: InputStream, maxHeaderSize: Int = 8192): ByteArray {
         val buffer = mutableListOf<Byte>()
-        var lastFour = byteArrayOf()
+        return try {
+            var lastFour = byteArrayOf()
 
-        while (true) {
-            val next = inputStream.read()
-            if (next == -1) break
-            buffer.add(next.toByte())
+            while (true) {
+                val next = inputStream.read()
+                if (next == -1) break
+                buffer.add(next.toByte())
 
-            lastFour = (lastFour + next.toByte()).takeLast(4).toByteArray()
-            if (lastFour.contentEquals("\r\n\r\n".toByteArray())) break
+                if (buffer.size > maxHeaderSize) throw Exception("Request malformed or headers too large")
+
+                lastFour = (lastFour + next.toByte()).takeLast(4).toByteArray()
+                if (validEndOfRequest(lastFour)) break
+            }
+
+            if (!validEndOfRequest(lastFour)) throw Exception("Malformed request - Headers not properly ended")
+
+            buffer.toByteArray()
+        } catch (exception: Exception) {
+            if (buffer.isEmpty()) throw RequestTimeoutException("No data received") else throw BadRequestException(
+                exception.message ?: ""
+            )
         }
-
-        return buffer.toByteArray()
     }
+
+    private fun validEndOfRequest(lastFour: ByteArray): Boolean = lastFour.contentEquals("\r\n\r\n".toByteArray())
 
     private fun readBody(inputStream: InputStream, length: Int): String {
         val buffer = ByteArray(length)

@@ -1,7 +1,6 @@
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import java.net.ServerSocket
 
@@ -12,7 +11,7 @@ class ConcurrentConnectionsTest {
 
     @BeforeEach
     fun setUp() {
-        val serverSocket = ServerSocket(SERVER_PORT + 10)
+        val serverSocket = ServerSocket(SERVER_PORT)
         server = MyHttpServer(serverSocket, httpRequestParser = HttpRequestParser())
 
         serverThread = Thread {
@@ -51,7 +50,6 @@ class ConcurrentConnectionsTest {
     }
 
     @Test
-    @Disabled
     fun `test concurrent bad requests`() = runBlocking {
         val clientCount = 10
 

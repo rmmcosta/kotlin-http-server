@@ -15,12 +15,14 @@ class MyHttpServer(
     fun initServer(endlessLoop: Boolean = true): Thread? {
         println("working dir: $defaultDir")
         serverSocket.reuseAddress = true
+        serverSocket.soTimeout = 500
         var ranOnce = false
         var clientThread: Thread? = null
 
         while (!ranOnce || endlessLoop) {
             try {
                 val clientSocket = serverSocket.accept()
+                clientSocket.soTimeout = 500
                 clientThread = thread {
                     handleClient(clientSocket)
                 }
@@ -37,28 +39,30 @@ class MyHttpServer(
         clientSocket.use { socket ->
             println("Accepted new connection")
 
-            val inputStream = socket.getInputStream()
-            val typedRequest = httpRequestParser.parse(inputStream)
-            println("the typed request: $typedRequest")
-            val responseBytes = try {
-
+            try {
+                val inputStream = socket.getInputStream()
+                val typedRequest = httpRequestParser.parse(inputStream)
+                println("the typed request: $typedRequest")
                 val responseStatus = determineStatus(typedRequest.urlPath, typedRequest.method)
                 println("response status: $responseStatus")
 
-                handleRequest(responseStatus, typedRequest)
+                val responseBytes = handleRequest(responseStatus, typedRequest)
+                println("request handled:${String(responseBytes)}")
+
+                socket.getOutputStream().use { out ->
+                    out.write(responseBytes)
+                    out.flush()
+                }
+
+                if (typedRequest.urlPath == KnownUrlPaths.STOP.urlPath) {
+                    closeServer()
+                }
             } catch (_: Exception) {
-                "HTTP/1.1 ${HttpStatus.BAD_REQUEST}\r\n\r\n".toByteArray()
-            }
-
-            println("request handled:${String(responseBytes)}")
-
-            socket.getOutputStream().use { out ->
-                out.write(responseBytes)
-                out.flush()
-            }
-
-            if (typedRequest.urlPath == KnownUrlPaths.STOP.urlPath) {
-                closeServer()
+                val badRequestResponse = "HTTP/1.1 ${HttpStatus.BAD_REQUEST}\r\n\r\n"
+                socket.getOutputStream().use { out ->
+                    out.write(badRequestResponse.toByteArray())
+                    out.flush()
+                }
             }
         }
     }
