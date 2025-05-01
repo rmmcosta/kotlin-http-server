@@ -13,7 +13,7 @@ class ConcurrentConnectionsTest {
     @BeforeEach
     fun setUp() {
         val serverSocket = ServerSocket(SERVER_PORT)
-        server = MyHttpServer(serverSocket, httpRequestParser = HttpRequestParser())
+        server = MyHttpServer(serverSocket, requestHandler = RequestHandler(HttpRequestParser()))
 
         serverThread = Thread {
             server.initServer(endlessLoop = true)

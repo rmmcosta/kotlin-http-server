@@ -21,7 +21,8 @@ class ConcurrentHttpServerTest {
         fun setup() {
             serverSocket = ServerSocket(PORT)
             serverThread = Thread {
-                val server = MyHttpServer(serverSocket, System.getProperty("user.dir"), HttpRequestParser())
+                val server =
+                    MyHttpServer(serverSocket, System.getProperty("user.dir"), RequestHandler(HttpRequestParser()))
                 server.initServer(endlessLoop = true)
             }
             serverThread.start()

@@ -20,7 +20,7 @@ class MyHttpServerTest {
         every { setReuseAddress(true) } just runs
         every { close() } just runs
     }
-    private val httpServer = MyHttpServer(serverSocket, httpRequestParser = HttpRequestParser())
+    private val httpServer = MyHttpServer(serverSocket, requestHandler = RequestHandler(HttpRequestParser()))
 
     @Test
     fun `given an http server, when sending an http get request, then a 200 ok should be received back`() {
